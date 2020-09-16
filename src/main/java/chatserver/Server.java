@@ -56,7 +56,7 @@ public class Server extends Thread {
     public synchronized void broadcast(Client from, String msg) {
         for (Client c : clients) {
             if (c.equals(from)) continue;
-            c.sendMessage(from.getName() + ": " +  msg);
+            c.sendMessage(from.getClientName() + ": " +  msg);
         }
 
     }
