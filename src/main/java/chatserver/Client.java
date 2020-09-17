@@ -3,16 +3,15 @@ package chatserver;
 import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
-import static java.lang.Thread.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Client extends Thread implements Closeable {
     private final Server server;
     private final Socket socket;
     private String name;
     private final ClientHandler handler;
-    private final ConcurrentLinkedQueue<String> messageQueue;
+    private final BlockingQueue<String> messageQueue;
 
     public Client(Server server, Socket socket, String name) throws IOException {
         this.server = server;
@@ -21,7 +20,7 @@ public class Client extends Thread implements Closeable {
                 socket.getInputStream(),
                 new PrintWriter(socket.getOutputStream()));
         this.name = name;
-        this.messageQueue = new ConcurrentLinkedQueue<>();
+        this.messageQueue = new LinkedBlockingQueue<>();
     }
 
     public String getClientName() {
@@ -31,22 +30,35 @@ public class Client extends Thread implements Closeable {
 
     @Override
     public void run() {
-        try {
-            name = handler.fetchName();
+        Thread t = new Thread(() -> {
             while (true) {
                 handler.showPrompt();
                 server.broadcast(this, handler.waitForLine());
-                String inbound;
-                while ((inbound = messageQueue.poll()) != null) {
-                    handler.out.println(inbound);
-                    handler.out.flush();
-                }
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        });
+        try {
+            String previousName = name;
+            name = handler.fetchName();
+            server.announceName(this, previousName);
+            t.start();
+
+            while (true) {
+                String inbound = messageQueue.take();
+                handler.out.println("...");
+                handler.out.println(inbound);
+                handler.showPrompt();
+            }
+        } catch (IOException | InterruptedException e) {
+            System.out.println(name + " exited with: " + e.getMessage());
         } finally {
             try { close(); } catch (IOException e) {
                 e.printStackTrace();
+            }
+            try {
+                t.interrupt();
+                t.join(1000);
+            } catch (InterruptedException e) {
+                t.stop();
             }
         }
     }

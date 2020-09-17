@@ -58,6 +58,13 @@ public class Server extends Thread {
             if (c.equals(from)) continue;
             c.sendMessage(from.getClientName() + ": " +  msg);
         }
+    }
 
+    public void announceName(Client from, String previous) {
+        System.out.println(from.getClientName() + " joined the chat!");
+        for (Client c : clients) {
+            if (c.equals(from)) continue;
+            c.sendMessage(from.getClientName() + " joined the chat!");
+        }
     }
 }
