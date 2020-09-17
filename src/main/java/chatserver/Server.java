@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
 
 public class Server extends Thread {
     private final ServerSocket socket;
@@ -67,4 +69,13 @@ public class Server extends Thread {
             c.sendMessage(from.getClientName() + " joined the chat!");
         }
     }
+
+    private volatile Game game;
+    public synchronized Game getActiveGame () {
+        if (game == null || game.done()) {
+            game = new Game(3);
+        }
+        return game;
+    }
+
 }

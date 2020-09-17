@@ -18,7 +18,7 @@ public class Client extends Thread implements Closeable {
         this.socket = socket;
         this.handler = new ClientHandler(
                 socket.getInputStream(),
-                new PrintWriter(socket.getOutputStream()));
+                new PrintWriter(socket.getOutputStream(), true));
         this.name = name;
         this.messageQueue = new LinkedBlockingQueue<>();
     }
@@ -31,17 +31,52 @@ public class Client extends Thread implements Closeable {
     @Override
     public void run() {
         Thread t = new Thread(() -> {
-            while (true) {
-                handler.showPrompt();
-                String line = handler.waitForLine();
-                if (line.startsWith("!rename")) {
-                    String previousName = name;
-                    name = handler.fetchName();
-                    server.announceName(this, previousName);
-                } else {
-                    server.broadcast(this, line);
+            try {
+                while (true) {
+                    handler.showPrompt();
+                    String line = handler.waitForLine();
+                    if (line.startsWith("!rename")) {
+                        String previousName = name;
+                        name = handler.fetchName();
+                        server.announceName(this, previousName);
+
+                    } else if (line.startsWith("!play")) {
+                        Client superThis = this;
+                        Game game = server.getActiveGame();
+                        game.play(new Game.GameParticipant() {
+                            @Override
+                            public void notifyGameStart(String secretWord) {
+                                handler.printMessage("Game started, write: " + secretWord);
+                            }
+
+                            @Override
+                            public void notifyWinner(Client winner) {
+                                if (winner.equals(superThis)) {
+                                    handler.printMessage("Yes you won");
+                                } else {
+                                    handler.printMessage("Dammm, you lost to " + winner.getClientName());
+                                }
+                            }
+
+                            @Override
+                            public String getAnswer() {
+                                return handler.waitForLine();
+                            }
+
+                            @Override
+                            public Client getClient() {
+                                return superThis;
+                            }
+                        });
+
+                    } else if (line.startsWith("!exit")) {
+                        socket.close();
+                        break;
+                    } else{
+                        server.broadcast(this, line);
+                    }
                 }
-            }
+            } catch (InterruptedException | IOException e) { }
         });
         try {
             String previousName = name;
@@ -51,9 +86,7 @@ public class Client extends Thread implements Closeable {
 
             while (true) {
                 String inbound = messageQueue.take();
-                handler.out.println("...");
-                handler.out.println(inbound);
-                handler.showPrompt();
+                handler.printMessage(inbound);
             }
         } catch (InterruptedException e) {
             System.out.println(name + " exited with: " + e.getMessage());
@@ -118,6 +151,11 @@ public class Client extends Thread implements Closeable {
         public boolean hasInput() throws IOException {
             in.readAllBytes();
             return in.available() > 0;
+        }
+
+        public void printMessage(String message) {
+            out.println(message);
+            out.flush();
         }
     }
 }
