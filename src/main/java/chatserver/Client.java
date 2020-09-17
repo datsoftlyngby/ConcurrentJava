@@ -33,7 +33,14 @@ public class Client extends Thread implements Closeable {
         Thread t = new Thread(() -> {
             while (true) {
                 handler.showPrompt();
-                server.broadcast(this, handler.waitForLine());
+                String line = handler.waitForLine();
+                if (line.startsWith("!rename")) {
+                    String previousName = name;
+                    name = handler.fetchName();
+                    server.announceName(this, previousName);
+                } else {
+                    server.broadcast(this, line);
+                }
             }
         });
         try {
@@ -48,7 +55,7 @@ public class Client extends Thread implements Closeable {
                 handler.out.println(inbound);
                 handler.showPrompt();
             }
-        } catch (IOException | InterruptedException e) {
+        } catch (InterruptedException e) {
             System.out.println(name + " exited with: " + e.getMessage());
         } finally {
             try { close(); } catch (IOException e) {
@@ -94,12 +101,12 @@ public class Client extends Thread implements Closeable {
             out.flush();
         }
 
-        private String prompt() throws IOException {
+        private String prompt() {
             showPrompt();
             return waitForLine();
         }
 
-        private String fetchName() throws IOException {
+        private String fetchName() {
             out.println("What's your name, man?");
             return prompt();
         }
